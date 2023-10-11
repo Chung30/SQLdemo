@@ -14,10 +14,20 @@ namespace SQLdemo.Controllers
             db = context;
         }
 
-        public IActionResult Index()
+        public IActionResult Index(int? mid)
         {
-            var learners = db.Learners.Include(m => m.Major).ToList();
-            return View(learners);
+            if (mid == null)
+            {
+                var learners = db.Learners.Include(m => m.Major).ToList();
+                return View(learners);
+            }
+            else
+            {
+                var learners = db.Learners
+                    .Where(l => l.MajorID == mid)
+                    .Include(m => m.Major).ToList();
+                return View(learners);
+            }
         }
 
         //thêm 2 action create
@@ -58,17 +68,18 @@ namespace SQLdemo.Controllers
         //get Update
         public IActionResult Edit(int id)
         {
-            var learners = db.Learners.Find(id);
-            if (learners == null)
+            if (id == null || db.Learners == null)
             {
                 return NotFound();
             }
 
-            // Tạo SelectList để hiển thị danh sách chuyên ngành (Majors)
-            var majors = new SelectList(db.Majors, "MajorID", "MajorName");
-            ViewBag.MajorID = majors;
-
-            return View(learners);
+            var learner = db.Learners.Find(id);
+            if (learner == null)
+            {
+                NotFound();
+            }
+            ViewBag.MajorId = new SelectList(db.Majors, "MajorID", "MajorName", learner.MajorID);
+            return View(learner);
         }
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -81,14 +92,35 @@ namespace SQLdemo.Controllers
 
             if (ModelState.IsValid)
             {
-                db.Update(learners);
-                db.SaveChanges();
+                try
+                {
+                    db.Update(learners);
+                    db.SaveChanges();
+                }
+                catch (DbUpdateException)
+                {
+                    if(LearnerExists(learners.LearnerID)) 
+                    {
+                        return NotFound();
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+
+
                 return RedirectToAction(nameof(Index));
             }
 
             // Tạo SelectList để hiển thị danh sách Majors
-            ViewBag.MajorID = new SelectList(db.Majors, "MajorID", "MajorName");
+            ViewBag.MajorID = new SelectList(db.Majors, "MajorID", "MajorName", learners.MajorID);
             return View(learners);
+        }
+
+        private bool LearnerExists(int id)
+        {
+            return (db.Learners?.Any(e => e.LearnerID == id)).GetValueOrDefault();
         }
 
         // Delete
